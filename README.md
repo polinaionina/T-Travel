@@ -1,5 +1,6 @@
 # T-Travel
 ## Структура проекта
+```
 t-travel/
 ├── app/                                  # Maven multi-module, Java 25
 │   ├── pom.xml                           # родительский: версии, плагины, список модулей
@@ -36,3 +37,4 @@ t-travel/
 ├── .gitignore
 ├── .env.example                          # Потом добавлю
 └── README.md
+```
