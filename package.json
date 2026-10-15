@@ -1,0 +1,14 @@
+{
+  "name": "t-travel",
+  "version": "1.0.0",
+  "description": "T-Travel",
+  "type": "module",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "husky": "^9.1.7"
+  }
+}
