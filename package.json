@@ -6,9 +6,19 @@
   "scripts": {
     "prepare": "husky"
   },
+  "lint-staged": {
+    "web/**/*.{ts,tsx}": [
+      "npm exec --prefix web --no -- prettier --write",
+      "npm exec --prefix web --no -- eslint --config web/eslint.config.js --fix"
+    ],
+    "web/**/*.{css,scss,json,md,yml,yaml}": [
+      "npm exec --prefix web --no -- prettier --write"
+    ]
+  },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0"
   }
 }
