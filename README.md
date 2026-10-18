@@ -12,10 +12,13 @@ t-travel/
 │   │   ├── pom.xml
 │   │   └── src/
 │   │       ├── main/java/ru/ttravel/orchestrator/
-│   │       │   ├── api/
-│   │       │   ├── domain/
-│   │       │   ├── providers/
-│   │       │   └── notification/
+│   │       │   ├── api/            # контроллеры + SSE (то, что видит web)
+│   │       │   ├── domain/         # сущности, enum статусов, репозит OrderService
+│   │       │   ├── booking/        # подтверждение компонентов и компенсации
+│   │       │   ├── providers/      # клиенты к поставщикам
+│   │       │   ├── events/         # журнал событий (OrderEvent, EventService)
+│   │       │   ├── notification/   # уведомления пользователю
+│   │       │   └── recovery/       # фоновые задачи: рестарт, ретраи, таймауты
 │   │       ├── main/resources/
 │   │       │   ├── application.yml
 │   │       │   └── db/migration/         # Потом добавиться, как соединим с бд
