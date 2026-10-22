@@ -1,0 +1,1 @@
+public interface AirportRepository extends JpaRepository<Airport, String> {}
