@@ -1,5 +1,5 @@
 ```mermaid
-stateDiagram-v2
+stateDiagram
     [*] --> CREATED: POST /orders
     CREATED --> IN_PROGRESS
     IN_PROGRESS --> CONFIRMED: система отработала корректно
@@ -12,4 +12,3 @@ stateDiagram-v2
     CONFIRMED --> [*]
     CANCELLED --> [*]
 ```
-
