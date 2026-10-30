@@ -13,11 +13,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import ru.ttravel.orchestrator.domain.models.ComponentStatus;
+import ru.ttravel.orchestrator.domain.models.ComponentType;
 
 import java.time.Instant;
 
-import ru.ttravel.orchestrator.domain.models.*;
-
+/**
+ * Компонент заказа: перелёт, гостиница, страховка или трансфер.
+ */
 @Entity
 @Table(name = "order_component")
 public class OrderComponent {
@@ -34,7 +37,7 @@ public class OrderComponent {
     @Column(nullable = false)
     private ComponentType type;
 
-    /** Порядок шагов: одинаковый номер значит параллельно, больший номер идёт позже. */
+    /** Номер шага (страницы), берётся из {@link ComponentType#getStepNo()}. */
     @Column(name = "step_no", nullable = false)
     private long stepNo;
 
@@ -42,14 +45,12 @@ public class OrderComponent {
     @Column(nullable = false)
     private ComponentStatus status;
 
-    /** Цена в копейках. */
     @Column(nullable = false)
     private long price;
 
     @Column(nullable = false, length = 3)
     private String currency;
 
-    /** Идентификатор предложения у поставщика. */
     @Column(name = "provider_offer_id")
     private String providerOfferId;
 
@@ -62,17 +63,26 @@ public class OrderComponent {
     @Column(name = "offer_snapshot")
     private String offerSnapshot;
 
-    /** Идентификатор брони у поставщика, появляется после reserve. */
+    /** Идентификатор брони у поставщика, появляется после {@code reserve}. */
     @Column(name = "external_booking_id")
     private String externalBookingId;
 
     protected OrderComponent() {
     }
 
-    public OrderComponent(ComponentType type, long stepNo, long price, String currency,
+    /**
+     * Создаёт компонент в статусе {@code PENDING}.
+     *
+     * @param type тип компонента
+     * @param price цена в копейках
+     * @param currency код валюты
+     * @param providerOfferId идентификатор предложения у поставщика
+     * @param offerSnapshot копия предложения в формате JSON
+     */
+    public OrderComponent(ComponentType type, long price, String currency,
                           String providerOfferId, String offerSnapshot) {
         this.type = type;
-        this.stepNo = stepNo;
+        this.stepNo = type.getStepNo();
         this.price = price;
         this.currency = currency;
         this.providerOfferId = providerOfferId;
@@ -80,17 +90,19 @@ public class OrderComponent {
         this.status = ComponentStatus.PENDING;
     }
 
-    /** Единственное место смены статуса компонента. */
+    /**
+     * Меняет статус компонента.
+     * @param newStatus новый статус
+     */
     public void changeStatus(ComponentStatus newStatus) {
         this.status = newStatus;
     }
 
+    void setTripOrder(TripOrder tripOrder) { this.tripOrder = tripOrder; }
+
     public void setExternalBookingId(String externalBookingId) { this.externalBookingId = externalBookingId; }
     public void setDeadlineAt(Instant deadlineAt) { this.deadlineAt = deadlineAt; }
     public void setPrice(long price) { this.price = price; }
-
-    /** Вызывается из TripOrder.addComponent. */
-    void setTripOrder(TripOrder tripOrder) { this.tripOrder = tripOrder; }
 
     public Long getId() { return id; }
     public TripOrder getTripOrder() { return tripOrder; }

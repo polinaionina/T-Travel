@@ -1,0 +1,23 @@
+package ru.ttravel.orchestrator.domain.models;
+
+/**
+ * Тип события в журнале заказа.
+ */
+public enum EventType {
+    ORDER_CREATED,
+    COMPONENT_RESERVED,
+    COMPONENT_RESERVE_FAILED,
+    ORDER_SUBMITTED,
+    COMPONENT_CONFIRMED,
+    COMPONENT_CONFIRM_FAILED,
+    PRICE_CHANGED,
+    RESERVATION_EXPIRED,
+    RETRY,
+    ACTION_REQUIRED,
+    ORDER_CONFIRMED,
+    COMPENSATION_STARTED,
+    COMPONENT_CANCELLED,
+    ORDER_CANCELLED,
+    COMPENSATION_FAILED,
+    STATUS_CHANGED
+}

@@ -2,6 +2,8 @@ package ru.ttravel.orchestrator.domain.data;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -10,10 +12,16 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import ru.ttravel.orchestrator.domain.models.EventType;
 
 import java.time.Instant;
 
-/** Запись журнала. Только добавление, изменять нельзя. */
+/**
+ * Запись журнала заказа. Таблица {@code order_event}.
+ * <p>
+ * Журнал только пополняется: записи не изменяются и не удаляются. Он служит источником
+ * для временной шкалы и уведомлений.
+ */
 @Entity
 @Immutable
 @Table(name = "order_event")
@@ -30,8 +38,9 @@ public class OrderEvent {
     @Column(name = "component_id")
     private Long componentId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false)
-    private String eventType;
+    private EventType eventType;
 
     @Column(name = "from_status")
     private String fromStatus;
@@ -51,7 +60,7 @@ public class OrderEvent {
     protected OrderEvent() {
     }
 
-    public OrderEvent(Long orderId, Long componentId, String eventType,
+    public OrderEvent(Long orderId, Long componentId, EventType eventType,
                       String fromStatus, String toStatus, String reason, String payload) {
         this.orderId = orderId;
         this.componentId = componentId;
@@ -70,7 +79,7 @@ public class OrderEvent {
     public Long getId() { return id; }
     public Long getOrderId() { return orderId; }
     public Long getComponentId() { return componentId; }
-    public String getEventType() { return eventType; }
+    public EventType getEventType() { return eventType; }
     public String getFromStatus() { return fromStatus; }
     public String getToStatus() { return toStatus; }
     public String getReason() { return reason; }
