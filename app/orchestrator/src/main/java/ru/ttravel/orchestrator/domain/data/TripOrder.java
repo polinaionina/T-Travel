@@ -53,6 +53,9 @@ public class TripOrder {
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
+    @Column(name = "request_hash", nullable = false, length = 64)
+    private String requestHash;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -70,10 +73,11 @@ public class TripOrder {
     protected TripOrder() {
     }
 
-    public TripOrder(Long userId, String currency, String idempotencyKey) {
+    public TripOrder(Long userId, String currency, String idempotencyKey, String requestHash) {
         this.userId = userId;
         this.currency = currency;
         this.idempotencyKey = idempotencyKey;
+        this.requestHash = requestHash;
         this.status = OrderStatus.DRAFT;
         this.totalPrice = 0;
     }
@@ -144,6 +148,7 @@ public class TripOrder {
     public String getCurrency() { return currency; }
     public String getFailureReason() { return failureReason; }
     public String getIdempotencyKey() { return idempotencyKey; }
+    public String getRequestHash() { return requestHash; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public long getVersion() { return version; }

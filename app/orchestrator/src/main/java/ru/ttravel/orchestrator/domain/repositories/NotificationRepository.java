@@ -5,6 +5,7 @@ import ru.ttravel.orchestrator.domain.data.Notification;
 import ru.ttravel.orchestrator.domain.models.NotificationStatus;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Доступ к таблице {@code notification}: уведомления пользователям.
@@ -29,4 +30,13 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
      * @return уведомления
      */
     List<Notification> findByUserIdAndStatusOrderByIdDesc(Long userId, NotificationStatus status);
+
+    /**
+     * Ищет уведомление по идентификатору и идентификатору владельца.
+     *
+     * @param id     идентификатор уведомления
+     * @param userId идентификатор пользователя
+     * @return найденное уведомление
+     */
+    Optional<Notification> findByIdAndUserId(Long id, Long userId);
 }
