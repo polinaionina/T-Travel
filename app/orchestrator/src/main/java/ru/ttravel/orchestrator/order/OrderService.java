@@ -4,9 +4,18 @@ import org.springframework.stereotype.Service;
 
 import jakarta.validation.constraints.NotNull;
 import ru.ttravel.orchestrator.domain.data.TripOrder;
+import ru.ttravel.orchestrator.domain.exceptions.InvalidRequestException;
 import ru.ttravel.orchestrator.domain.exceptions.OrchestratorException;
 import ru.ttravel.orchestrator.domain.exceptions.OrderNotFoundException;
+import ru.ttravel.orchestrator.domain.models.ComponentStatus;
+import ru.ttravel.orchestrator.domain.models.OrderStatus;
 import ru.ttravel.orchestrator.domain.repositories.OrderRepository;
+import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Set;
 
 @Service
 public class OrderService {
@@ -14,6 +23,14 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final IdempotencyService idempotencyService;
     private final OrderTransitionService orderTransitionService;
+
+    private static final Set<ComponentStatus> ACTIVE_RESERVATION_STATUSES = Set.of(
+            ComponentStatus.RESERVED,
+            ComponentStatus.CONFIRMED,
+            ComponentStatus.COMPENSATING,
+            ComponentStatus.UNKNOWN,
+            ComponentStatus.RESERVING
+    );
 
     public OrderService(
             OrderRepository orderRepository,
@@ -39,7 +56,21 @@ public class OrderService {
             @NotNull String currency,
             @NotNull String idempotencyKey,
             @NotNull String requestHash
-    ) throws OrchestratorException;
+    ) throws OrchestratorException {
+        var order = idempotencyService.checkIdempotency(userId, idempotencyKey, requestHash);
+        if (order.isPresent()) {
+            return order.get();
+        }
+        
+        TripOrder newOrder = new TripOrder(
+                userId,
+                currency,
+                idempotencyKey,
+                requestHash
+        );
+
+        return orderRepository.save(newOrder);
+    }
 
     /**
      * Возвращает заказ пользователя.
@@ -51,7 +82,16 @@ public class OrderService {
     public TripOrder getOrder(
             @NotNull Long orderId,
             @NotNull Long userId
-    ) throws OrderNotFoundException;
+    ) throws OrderNotFoundException {
+        TripOrder tripOrder = orderRepository.findWithComponentsById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (!tripOrder.getUserId().equals(userId)) {
+            throw new OrderNotFoundException(orderId);
+        }
+
+        return tripOrder;
+    }
 
     /**
      * Возвращает страницу заказов пользователя.
@@ -60,19 +100,56 @@ public class OrderService {
      * @param pageable параметры пагинации
      * @return страница заказов
      */
+    @Transactional(readOnly = true)
     public Page<TripOrder> getUserOrders(
             @NotNull Long userId,
             @NotNull Pageable pageable
-    );
+    ) {
+        return orderRepository.findByUserId(userId, pageable);
+    }
 
     /**
-     * Отменяет заказ пользователя.
+     * Отменяет заказ, если для этого не требуется компенсация.
+     *
+     * Если у заказа есть компоненты, которые уже резервируются,
+     * зарезервированы, подтверждены или находятся в неопределённом
+     * состоянии, отмена должна выполняться через CompensationService.
      *
      * @param orderId идентификатор заказа
      * @param userId идентификатор пользователя
+     * @throws OrchestratorException если заказ нельзя отменить
      */
-    public void cancelOrder(
-            @NotNull Long orderId,
-            @NotNull Long userId
-    ) throws OrchestratorException;
+    @Transactional
+    public void cancelOrder(Long orderId, Long userId)
+            throws OrchestratorException {
+
+        TripOrder order = getOrder(orderId, userId);
+
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            return;
+        }
+
+        if (order.getStatus() == OrderStatus.COMPENSATING) {
+            return;
+        }
+
+        boolean hasActiveReservations = order.activeComponents()
+                .stream()
+                .anyMatch(component ->
+                        ACTIVE_RESERVATION_STATUSES.contains(component.getStatus())
+                );
+
+        if (hasActiveReservations) {
+            throw new InvalidRequestException(
+                    "Для отмены заказа требуется компенсация бронирований"
+            );
+        }
+
+        orderTransitionService.transition(
+                order,
+                OrderStatus.CANCELLED,
+                ru.ttravel.orchestrator.domain.models.EventType.ORDER_CANCELLED,
+                "Заказ отменён пользователем"
+        );
+    }
 }
