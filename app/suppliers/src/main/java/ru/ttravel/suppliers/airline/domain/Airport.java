@@ -15,8 +15,8 @@ public class Airport {
     @Column(name = "code", length = 3, nullable = false)
     private String code;
 
-    @Column(name = "city", nullable = false)
-    private String city;
+    @Column(name = "city_id", nullable = false)
+    private Integer cityId;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -35,13 +35,13 @@ public class Airport {
      * Creates a new airport and records the creation time.
      *
      * @param code     airport code, usually IATA code
-     * @param city     city where the airport is located
+     * @param cityId   ID of the city where the airport is located
      * @param name     airport name
      * @param timezone timezone where the airport is located
      */
-    public Airport(String code, String city, String name, String timezone) {
+    public Airport(String code, Integer cityId, String name, String timezone) {
         this.code = code;
-        this.city = city;
+        this.cityId = cityId;
         this.name = name;
         this.timezone = timezone;
     }
@@ -54,12 +54,12 @@ public class Airport {
         this.code = code;
     }
 
-    public String getCity() {
-        return city;
+    public Integer getCityId() {
+        return cityId;
     }
 
-    public void setCity(String city) {
-        this.city = city;
+    public void setCityId(Integer cityId) {
+        this.cityId = cityId;
     }
 
     public String getName() {
