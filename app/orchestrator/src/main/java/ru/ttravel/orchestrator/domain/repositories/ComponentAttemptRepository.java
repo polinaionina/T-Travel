@@ -48,4 +48,17 @@ public interface ComponentAttemptRepository extends JpaRepository<ComponentAttem
      * @return количество попыток этой операции
      */
     long countByComponentIdAndOperation(Long componentId, AttemptOperation operation);
+
+    /**
+     * Проверяет, существует ли незавершённая попытка указанной операции
+     * по компоненту.
+     *
+     * @param componentId идентификатор компонента
+     * @param operation тип операции
+     * @return true, если незавершённая попытка существует
+     */
+    boolean existsByComponentIdAndOperationAndResultIsNull(
+            Long componentId,
+            AttemptOperation operation
+    );
 }
