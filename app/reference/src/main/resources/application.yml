@@ -1,0 +1,10 @@
+server:
+  port: 8085
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/reference
+    username: ...
+    password: ...
+  jpa:
+    hibernate:
+      ddl-auto: validate
