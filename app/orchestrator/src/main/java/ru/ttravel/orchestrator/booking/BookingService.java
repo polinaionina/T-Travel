@@ -15,7 +15,6 @@ import ru.ttravel.orchestrator.domain.models.ComponentType;
 import ru.ttravel.orchestrator.domain.models.EventType;
 import ru.ttravel.orchestrator.domain.models.OrderStatus;
 import ru.ttravel.orchestrator.domain.repositories.ComponentAttemptRepository;
-import ru.ttravel.orchestrator.events.EventService;
 import ru.ttravel.orchestrator.order.OrderService;
 import ru.ttravel.orchestrator.order.OrderTransitionService;
 
