@@ -1,0 +1,1 @@
+public interface FlightRepository extends JpaRepository<Flight, Integer> {}
