@@ -47,7 +47,7 @@ public class Booking {
 
     /** The status of the booking. */
     @Column(name = "status", nullable = false)
-    private String status;
+    private BookingStatus status;
 
     /** The actual price at the time of booking. */
     @Column(name = "price", nullable = false)
@@ -75,7 +75,7 @@ public class Booking {
      * @param price     the actual price at the time of booking
      */
     public Booking(FlightFare fare, String offerId, String requestId,
-                   String status, Long price) {
+                   BookingStatus status, Long price) {
         this.fare = fare;
         this.offerId = offerId;
         this.requestId = requestId;
@@ -116,7 +116,7 @@ public class Booking {
         this.requestId = requestId;
     }
 
-    public String getStatus() {
+    public BookingStatus getStatus() {
         return status;
     }
 
@@ -136,21 +136,18 @@ public class Booking {
         return cancelledAt;
     }
 
-    /**
-     * Cancels the reservation: changes the status to {@code CANCELLED} and records the cancellation time.
-     * <p>
-     * The operation is idempotent: if the booking has already been cancelled, the method does not change anything.
-     * and does not overwrite the time of the first cancellation.
-     * <p>
-     * The method does not return the seat in {@link FlightFare#getSeatsAvailable()}: this is done by
-     * The cancellation service is within the same transaction.
-     */
-    public void cancel() {
-        if ("CANCELLED".equals(status)) {
-            return;
+    public void confirm() {
+        if (status == BookingStatus.CONFIRMED) return;
+        if (status != BookingStatus.RESERVED) {
+            throw new IllegalStateException("Cannot confirm booking in status " + status);
         }
-        this.status = "CANCELLED";
-        this.cancelledAt = OffsetDateTime.now(ZoneOffset.UTC);
+        status = BookingStatus.CONFIRMED;
+    }
+
+    public void cancel() {
+        if (status == BookingStatus.CANCELLED) return;
+        status = BookingStatus.CANCELLED;
+        cancelledAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 }
 

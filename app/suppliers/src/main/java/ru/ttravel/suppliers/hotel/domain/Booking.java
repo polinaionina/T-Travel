@@ -62,7 +62,7 @@ public class Booking {
 
     /** Booking state: {@code CONFIRMED} or {@code CANCELLED}. */
     @Column(name = "status", nullable = false)
-    private String status;
+    private BookingStatus status;
 
     /** Actual total price for all nights, as an integer amount in the project-wide unit. */
     @Column(name = "total_price", nullable = false)
@@ -92,7 +92,7 @@ public class Booking {
      * @param totalPrice total price for all nights
      */
     public Booking(RoomType roomType, LocalDate checkIn, LocalDate checkOut,
-                   Integer guests, String requestId, String status, Long totalPrice) {
+                   Integer guests, String requestId, BookingStatus status, Long totalPrice) {
         this.roomType = roomType;
         this.checkIn = checkIn;
         this.checkOut = checkOut;
@@ -151,7 +151,7 @@ public class Booking {
         this.requestId = requestId;
     }
 
-    public String getStatus() {
+    public BookingStatus getStatus() {
         return status;
     }
 
@@ -171,20 +171,17 @@ public class Booking {
         return cancelledAt;
     }
 
-    /**
-     * Cancels the reservation: changes the status to {@code CANCELLED} and records the cancellation time.
-     * <p>
-     * The operation is idempotent: if the booking has already been cancelled, the method does not change anything.
-     * and does not overwrite the time of the first cancellation.
-     * <p>
-     * The method does not return the room in {@link RoomAvailability#getRoomsAvailable()}: this is done by
-     * The cancellation service is within the same transaction.
-     */
-    public void cancel() {
-        if ("CANCELLED".equals(status)) {
-            return;
+    public void confirm() {
+        if (status == BookingStatus.CONFIRMED) return;
+        if (status != BookingStatus.RESERVED) {
+            throw new IllegalStateException("Cannot confirm booking in status " + status);
         }
-        this.status = "CANCELLED";
-        this.cancelledAt = OffsetDateTime.now(ZoneOffset.UTC);
+        status = BookingStatus.CONFIRMED;
+    }
+
+    public void cancel() {
+        if (status == BookingStatus.CANCELLED) return;
+        status = BookingStatus.CANCELLED;
+        cancelledAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 }
