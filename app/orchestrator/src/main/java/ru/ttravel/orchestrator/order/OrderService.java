@@ -17,6 +17,9 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class OrderService {
 
@@ -24,18 +27,20 @@ public class OrderService {
     private final IdempotencyService idempotencyService;
     private final OrderTransitionService orderTransitionService;
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private static final Set<ComponentStatus> ACTIVE_RESERVATION_STATUSES = Set.of(
-            ComponentStatus.RESERVED,
-            ComponentStatus.CONFIRMED,
-            ComponentStatus.COMPENSATING,
-            ComponentStatus.UNKNOWN,
-            ComponentStatus.RESERVING
+        ComponentStatus.RESERVED,
+        ComponentStatus.CONFIRMED,
+        ComponentStatus.COMPENSATING,
+        ComponentStatus.UNKNOWN,
+        ComponentStatus.RESERVING
     );
 
     public OrderService(
-            OrderRepository orderRepository,
-            IdempotencyService idempotencyService,
-            OrderTransitionService orderTransitionService
+        OrderRepository orderRepository,
+        IdempotencyService idempotencyService,
+        OrderTransitionService orderTransitionService
     ) {
         this.orderRepository = orderRepository;
         this.idempotencyService = idempotencyService;
@@ -52,10 +57,10 @@ public class OrderService {
      * @return созданный или ранее существующий заказ
      */
     public TripOrder createOrder(
-            @NotNull Long userId,
-            @NotNull String currency,
-            @NotNull String idempotencyKey,
-            @NotNull String requestHash
+        @NotNull Long userId,
+        @NotNull String currency,
+        @NotNull String idempotencyKey,
+        @NotNull String requestHash
     ) throws OrchestratorException {
         var order = idempotencyService.checkIdempotency(userId, idempotencyKey, requestHash);
         if (order.isPresent()) {
@@ -69,7 +74,15 @@ public class OrderService {
                 requestHash
         );
 
-        return orderRepository.save(newOrder);
+        TripOrder savedOrder = orderRepository.save(newOrder);
+
+        log.info("Order created: orderId={}, userId={}, currency={}",
+                savedOrder.getId(),
+                userId,
+                currency
+        );
+
+        return savedOrder;
     }
 
     /**
@@ -80,8 +93,8 @@ public class OrderService {
      * @return найденный заказ
      */
     public TripOrder getOrder(
-            @NotNull Long orderId,
-            @NotNull Long userId
+        @NotNull Long orderId,
+        @NotNull Long userId
     ) throws OrderNotFoundException {
         TripOrder tripOrder = orderRepository.findWithComponentsById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -102,8 +115,8 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public Page<TripOrder> getUserOrders(
-            @NotNull Long userId,
-            @NotNull Pageable pageable
+        @NotNull Long userId,
+        @NotNull Pageable pageable
     ) {
         return orderRepository.findByUserId(userId, pageable);
     }
@@ -120,17 +133,24 @@ public class OrderService {
      * @throws OrchestratorException если заказ нельзя отменить
      */
     @Transactional
-    public void cancelOrder(Long orderId, Long userId)
-            throws OrchestratorException {
+    public void cancelOrder(Long orderId, Long userId) throws OrchestratorException {
 
         TripOrder order = getOrder(orderId, userId);
 
+        log.info("Order cancellation requested: orderId={}, userId={}, status={}",
+                orderId,
+                userId,
+                order.getStatus()
+        );
+
         if (order.getStatus() == OrderStatus.CANCELLED) {
-            return;
+                log.debug("Order is already cancelled: orderId={}", orderId);
+                return;
         }
 
         if (order.getStatus() == OrderStatus.COMPENSATING) {
-            return;
+                log.debug("Order compensation is already in progress: orderId={}", orderId);
+                return;
         }
 
         boolean hasActiveReservations = order.activeComponents()
@@ -140,9 +160,12 @@ public class OrderService {
                 );
 
         if (hasActiveReservations) {
-            throw new InvalidRequestException(
-                    "Для отмены заказа требуется компенсация бронирований"
-            );
+                log.warn("Order cannot be cancelled directly, compensation required: orderId={}",
+                        orderId
+                );
+                throw new InvalidRequestException(
+                        "Для отмены заказа требуется компенсация бронирований"
+                );
         }
 
         orderTransitionService.transition(

@@ -12,6 +12,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Сервис для обеспечения идемпотентности операций с заказами.
  */
@@ -19,6 +22,8 @@ import java.util.Optional;
 public class IdempotencyService {
 
     private final OrderRepository orderRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(IdempotencyService.class);
 
     public IdempotencyService(OrderRepository orderRepository) {
         this.orderRepository = orderRepository;
@@ -105,8 +110,18 @@ public class IdempotencyService {
         TripOrder order = existingOrder.get();
 
         if (!isSameRequest(order, requestHash)) {
+            log.warn("Idempotency conflict: userId={}, orderId={}",
+                    userId,
+                    order.getId()
+            );
+
             throw new IdempotencyConflictException(idempotencyKey);
         }
+
+        log.info("Idempotent request detected: userId={}, orderId={}",
+                userId,
+                order.getId()
+        );
 
         return existingOrder;
     }

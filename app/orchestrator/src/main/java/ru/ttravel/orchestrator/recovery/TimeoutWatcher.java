@@ -11,6 +11,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Периодически проверяет компоненты заказов на истечение дедлайнов.
  */
@@ -24,6 +27,8 @@ public class TimeoutWatcher {
     );
 
     private final OrderComponentRepository componentRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(TimeoutWatcher.class);
 
     public TimeoutWatcher(OrderComponentRepository componentRepository) {
         this.componentRepository = componentRepository;
@@ -45,8 +50,13 @@ public class TimeoutWatcher {
                 );
 
         if (overdueComponents.isEmpty()) {
+            log.debug("Timeout check completed: no overdue components");
             return;
         }
+
+        log.warn("Found {} overdue components",
+            overdueComponents.size()
+        );
 
         handleOverdueComponents(overdueComponents);
     }
@@ -58,8 +68,11 @@ public class TimeoutWatcher {
      */
     private void handleOverdueComponents(List<OrderComponent> components) {
         for (OrderComponent component : components) {
-            System.out.println(
-                    "Обнаружен просроченный компонент: " + component.getId()
+            log.warn("Overdue component detected: componentId={}, orderId={}, status={}, deadlineAt={}",
+                    component.getId(),
+                    component.getTripOrder().getId(),
+                    component.getStatus(),
+                    component.getDeadlineAt()
             );
         }
     }

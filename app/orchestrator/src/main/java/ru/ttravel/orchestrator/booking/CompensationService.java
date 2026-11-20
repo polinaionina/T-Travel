@@ -21,6 +21,9 @@ import ru.ttravel.orchestrator.order.OrderTransitionService;
 import java.util.Comparator;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class CompensationService {
 
@@ -28,6 +31,8 @@ public class CompensationService {
     private final ComponentAttemptRepository attemptRepository;
     private final ComponentProcessor componentProcessor;
     private final OrderTransitionService transitionService;
+
+    private static final Logger log = LoggerFactory.getLogger(CompensationService.class);
 
     public CompensationService(
             OrderRepository orderRepository,
@@ -60,11 +65,19 @@ public class CompensationService {
 
         TripOrder order = getOrder(orderId, userId);
 
+        log.info("Starting compensation: orderId={}, userId={}, status={}",
+                orderId,
+                userId,
+                order.getStatus()
+        );
+
         if (order.getStatus() == OrderStatus.CANCELLED) {
+            log.debug("Order is already cancelled: orderId={}", orderId);
             return null;
         }
 
         if (order.getStatus() == OrderStatus.COMPENSATING) {
+            log.debug("Compensation already in progress: orderId={}", orderId);
             return startNextCancellation(order);
         }
 
@@ -115,6 +128,12 @@ public class CompensationService {
 
         TripOrder order = getOrder(orderId, userId);
 
+        log.info("Handling cancellation result: orderId={}, componentId={}, result={}",
+                orderId,
+                componentId,
+                result
+        );
+
         if (order.getStatus() != OrderStatus.COMPENSATING) {
             throw new InvalidRequestException(
                     "Заказ не находится в состоянии COMPENSATING"
@@ -140,6 +159,11 @@ public class CompensationService {
         );
 
         if (result == AttemptResult.FAILED) {
+            log.error("Component cancellation failed: orderId={}, componentId={}, reason={}",
+                    orderId,
+                    componentId,
+                    reason
+            );
             transitionService.transition(
                     order,
                     OrderStatus.COMPENSATION_FAILED,
@@ -151,7 +175,10 @@ public class CompensationService {
         }
 
         if (result == AttemptResult.TIMEOUT) {
-            // Нельзя продолжать отмену, пока результат неизвестен.
+            log.warn("Component cancellation timed out: orderId={}, componentId={}",
+                    orderId,
+                    componentId
+            );
             return null;
         }
 
@@ -189,17 +216,34 @@ public class CompensationService {
                     || status == ComponentStatus.CONFIRMED) {
 
                 if (hasPendingCancellation(component.getId())) {
+                    log.debug("Cancellation already pending: orderId={}, componentId={}",
+                            order.getId(),
+                            component.getId()
+                    );
                     return null;
                 }
+
+                log.info("Starting component cancellation: orderId={}, componentId={}, stepNo={}, status={}",
+                        order.getId(),
+                        component.getId(),
+                        component.getStepNo(),
+                        status
+                );
 
                 return componentProcessor.startCancel(component.getId());
             }
 
-            // RESERVING, UNKNOWN и COMPENSATING требуют
-            // отдельного восстановления или разрешения состояния.
+            log.warn("Compensation paused: orderId={}, componentId={}, status={}",
+                    order.getId(),
+                    component.getId(),
+                    status
+            );
             return null;
         }
 
+        log.info("All component cancellations completed: orderId={}",
+                order.getId()
+        );
         transitionService.transition(
                 order,
                 OrderStatus.CANCELLED,

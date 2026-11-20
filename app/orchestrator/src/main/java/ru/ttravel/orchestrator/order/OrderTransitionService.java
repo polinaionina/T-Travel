@@ -10,6 +10,9 @@ import ru.ttravel.orchestrator.domain.repositories.OrderRepository;
 import ru.ttravel.orchestrator.domain.state.OrderStateMachine;
 import ru.ttravel.orchestrator.events.EventService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Сервис управления переходами заказов между статусами.
  */
@@ -19,6 +22,8 @@ public class OrderTransitionService {
     private final OrderStateMachine stateMachine;
     private final OrderRepository orderRepository;
     private final EventService eventService;
+
+    private static final Logger log = LoggerFactory.getLogger(OrderTransitionService.class);
 
     public OrderTransitionService(
             OrderStateMachine stateMachine,
@@ -49,9 +54,26 @@ public class OrderTransitionService {
 
         OrderStatus previousStatus = order.getStatus();
 
-        stateMachine.assertAllowed(previousStatus, newStatus);
+        try {
+            stateMachine.assertAllowed(previousStatus, newStatus);
+        } catch (InvalidStatusTransitionException e) {
+            log.warn(
+                    "Invalid order status transition: orderId={}, previousStatus={}, newStatus={}",
+                    order.getId(),
+                    previousStatus,
+                    newStatus
+            );
+            throw e;
+        }
 
         order.changeStatus(newStatus);
+
+        log.info("Order status changed: orderId={}, previousStatus={}, newStatus={}, eventType={}",
+                order.getId(),
+                previousStatus,
+                newStatus,
+                eventType
+        );
 
         eventService.record(
                 order.getId(),

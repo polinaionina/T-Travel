@@ -21,6 +21,9 @@ import ru.ttravel.orchestrator.order.OrderTransitionService;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class BookingService {
 
@@ -28,6 +31,8 @@ public class BookingService {
     private final OrderTransitionService transitionService;
     private final ComponentProcessor componentProcessor;
     private final ComponentAttemptRepository attemptRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     public BookingService(
             OrderService orderService,
@@ -59,14 +64,23 @@ public class BookingService {
 
         TripOrder order = orderService.getOrder(orderId, userId);
 
+        log.info("Starting booking: orderId={}, userId={}, status={}",
+                orderId,
+                userId,
+                order.getStatus()
+        );
+
         validateComponents(order);
 
         OrderStatus status = order.getStatus();
 
-        if (status != OrderStatus.DRAFT
-                && status != OrderStatus.ACTION_REQUIRED) {
+        if (status != OrderStatus.DRAFT && status != OrderStatus.ACTION_REQUIRED) {
+            log.warn("Cannot start booking: orderId={}, status={}",
+                orderId,
+                status
+            );
             throw new InvalidRequestException(
-                    "Нельзя запустить подтверждение заказа в статусе " + status
+                "Нельзя запустить подтверждение заказа в статусе " + status
             );
         }
 
@@ -116,6 +130,12 @@ public class BookingService {
 
         TripOrder order = orderService.getOrder(orderId, userId);
 
+        log.info("Handling confirmation result: orderId={}, componentId={}, result={}",
+                orderId,
+                componentId,
+                result
+        );
+
         boolean belongsToOrder = order.activeComponents().stream()
                 .anyMatch(component -> component.getId().equals(componentId));
 
@@ -139,6 +159,11 @@ public class BookingService {
         );
 
         if (result == AttemptResult.FAILED) {
+            log.warn("Component confirmation failed: orderId={}, componentId={}, reason={}",
+                    orderId,
+                    componentId,
+                    reason
+            );
             transitionService.transition(
                     order,
                     OrderStatus.ACTION_REQUIRED,
@@ -150,6 +175,10 @@ public class BookingService {
         }
 
         if (result == AttemptResult.TIMEOUT) {
+            log.warn("Component confirmation timed out: orderId={}, componentId={}",
+                    orderId,
+                    componentId
+            );
             return null;
         }
 
@@ -161,6 +190,9 @@ public class BookingService {
                 );
 
         if (allConfirmed) {
+            log.info("All components confirmed: orderId={}",
+                    orderId
+            );
             transitionService.transition(
                     order,
                     OrderStatus.CONFIRMED,
@@ -188,6 +220,9 @@ public class BookingService {
                 .collect(java.util.stream.Collectors.toSet());
 
         if (!selectedTypes.containsAll(ComponentType.requiredTypes())) {
+            log.warn("Booking validation failed: required components are missing, orderId={}",
+                order.getId()
+            );
             throw new InvalidRequestException(
                     "Не выбраны все обязательные компоненты заказа"
             );
@@ -199,6 +234,9 @@ public class BookingService {
                 );
 
         if (!allReserved) {
+            log.warn("Booking validation failed: components are not all reserved, orderId={}",
+                order.getId()
+            );
             throw new InvalidRequestException(
                     "Все выбранные компоненты должны быть зарезервированы"
             );
@@ -220,6 +258,12 @@ public class BookingService {
             if (hasPendingConfirmation(component.getId())) {
                 continue;
             }
+
+            log.info("Starting component confirmation: orderId={}, componentId={}, componentType={}",
+                order.getId(),
+                component.getId(),
+                component.getType()
+            );
 
             return componentProcessor.startConfirm(component.getId());
         }

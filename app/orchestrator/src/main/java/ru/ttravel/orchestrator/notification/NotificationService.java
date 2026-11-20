@@ -10,6 +10,9 @@ import ru.ttravel.orchestrator.domain.repositories.NotificationRepository;
 
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Сервис управления пользовательскими уведомлениями.
  */
@@ -17,6 +20,8 @@ import java.util.List;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     public NotificationService(NotificationRepository notificationRepository) {
         this.notificationRepository = notificationRepository;
@@ -36,7 +41,16 @@ public class NotificationService {
                 message
         );
 
-        return notificationRepository.save(notification);
+        Notification savedNotification = notificationRepository.save(notification);
+
+        log.debug("Notification created: notificationId={}, orderId={}, userId={}, eventId={}",
+                savedNotification.getId(),
+                orderId,
+                userId,
+                eventId
+        );
+
+        return savedNotification;
     }
 
     /**
@@ -85,6 +99,11 @@ public class NotificationService {
                 .orElseThrow(() ->
                         new NotificationNotFoundException(notificationId)
                 );
+        
+        log.debug("Notification marked as read: notificationId={}, userId={}",
+                notificationId,
+                userId
+        );
 
         notification.markRead();
     }

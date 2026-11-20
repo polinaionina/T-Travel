@@ -10,6 +10,9 @@ import ru.ttravel.orchestrator.domain.repositories.OrderRepository;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Находит незавершённые заказы для восстановления после сбоя
  * или перезапуска оркестратора.
@@ -25,6 +28,8 @@ public class RecoveryService {
 
     private final OrderRepository orderRepository;
 
+    private static final Logger log = LoggerFactory.getLogger(RecoveryService.class);
+
     public RecoveryService(OrderRepository orderRepository) {
         this.orderRepository = orderRepository;
     }
@@ -36,7 +41,11 @@ public class RecoveryService {
      */
     @Transactional(readOnly = true)
     public List<TripOrder> findOrdersForRecovery() {
-        return orderRepository.findByStatusIn(RECOVERABLE_STATUSES);
+        List<TripOrder> orders = orderRepository.findByStatusIn(RECOVERABLE_STATUSES);
+
+        log.info("Found {} orders for recovery", orders.size());
+
+        return orders;
     }
 
     /**
@@ -46,10 +55,14 @@ public class RecoveryService {
      */
     @Transactional(readOnly = true)
     public List<TripOrder> findOrdersForConfirmationRecovery() {
-        return orderRepository.findByStatusIn(Set.of(
-                OrderStatus.SUBMITTED,
-                OrderStatus.CONFIRMING
+        List<TripOrder> orders = orderRepository.findByStatusIn(Set.of(
+            OrderStatus.SUBMITTED,
+            OrderStatus.CONFIRMING
         ));
+
+        log.info("Found {} orders for confirmation recovery", orders.size());
+
+        return orders;
     }
 
     /**
@@ -59,8 +72,12 @@ public class RecoveryService {
      */
     @Transactional(readOnly = true)
     public List<TripOrder> findOrdersForCompensationRecovery() {
-        return orderRepository.findByStatusIn(Set.of(
-                OrderStatus.COMPENSATING
+        List<TripOrder> orders = orderRepository.findByStatusIn(Set.of(
+            OrderStatus.COMPENSATING
         ));
+
+        log.info("Found {} orders for compensation recovery", orders.size());
+
+        return orders;
     }
 }
