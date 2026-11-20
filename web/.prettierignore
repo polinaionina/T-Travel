@@ -1,0 +1,21 @@
+# Зависимости
+node_modules
+package-lock.json
+
+# Сборка
+dist
+build
+
+# Кэш
+.cache
+*.log
+.vite
+
+# IDE
+.idea
+
+# Другое
+coverage
+.env
+
+*.tsbuildinfo
