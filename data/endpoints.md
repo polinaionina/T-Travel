@@ -20,10 +20,10 @@
 | Метод | Путь | Назначение | Запрос | Успешный ответ | Ошибки |
 |---|---|---|---|---|---|
 | `POST` | `/orders` | Создать заказ (статус `DRAFT`) и зафиксировать выбранные предложения | заголовок `Idempotency-Key` (обязателен); тело: `userId`, `components[]` (`type`, `offerId`) | `201` заказ; `200` и тот же заказ, если ключ уже использован с тем же телом | `400`, `409` (ключ уже использован с другим телом) |
-| `POST` | `/orders/{id}/submit` | Отправить заказ на подтверждение, запускает процесс | без тела | `202` заказ в статусе `SUBMITTED` | `404`, `409` (недопустимый переход) |
+| `POST` | `/orders/{id}/submit` | Запустить подтверждение заказа из статуса `DRAFT` | без тела | `202` заказ в статусе `CONFIRMING` | `404`, `409` (недопустимый переход) |
 | `GET` | `/orders/{id}` | Заказ со статусами компонентов | - | `200` заказ | `404` |
 | `GET` | `/orders` | Список заказов пользователя | query: `userId` (обязателен), `status`, `page`, `size` | `200` страница заказов | `400` |
-| `POST` | `/orders/{id}/cancel` | Отмена заказа пользователем | тело: `reason` | `202` заказ в статусе `COMPENSATING` или `CANCELLED` | `404`, `409` |
+| `POST` | `/orders/{id}/cancel` | Отмена заказа пользователем из статусов `DRAFT`, `PAYMENT_FAILED` или `ACTION_REQUIRED` | тело: `reason` | `202` заказ в статусе `CANCELLING` (из `ACTION_REQUIRED`) или `CANCELLED` (из `DRAFT` или `PAYMENT_FAILED`) | `404`, `409` |
 
 ### Журнал и обновления
 
@@ -133,7 +133,7 @@
   "userId": 7,
   "orderId": 101,
   "eventId": 42,
-  "message": "Гостиница недоступна, заказ отменяется",
+  "message": "Гостиница недоступна, выберите замену",
   "status": "UNREAD",
   "createdAt": "2026-10-16T07:10:08Z",
   "readAt": null
@@ -155,8 +155,8 @@ data: {"id":42,"orderId":101,"componentId":1002,"eventType":"STATUS_CHANGED","fr
 
 | Сущность | Значения |
 |---|---|
-| Заказ (`OrderStatus`) | `DRAFT`, `SUBMITTED`, `CONFIRMING`, `CONFIRMED`, `COMPENSATING`, `CANCELLED`, `COMPENSATION_FAILED` |
-| Компонент (`ComponentStatus`) | `PENDING`, `RESERVING`, `RESERVED`, `CONFIRMED`, `FAILED`, `UNKNOWN`, `COMPENSATING`, `CANCELLED` |
+| Заказ (`OrderStatus`) | `DRAFT`, `CONFIRMING`, `PAYMENT_PENDING`, `ACTION_REQUIRED`, `CONFIRMED`, `PAYMENT_FAILED`, `CANCELLING`, `CANCELLED`, `NEEDS_HELP` |
+| Компонент (`ComponentStatus`) | `PENDING`, `RESERVING`, `PAYMENT_PENDING`, `CONFIRMED`, `FAILED`, `UNKNOWN`, `COMPENSATING`, `CANCELLED` |
 | Тип компонента (`ComponentType`) | `FLIGHT`, `HOTEL`, `INSURANCE`, `TRANSFER` |
 | Уведомление | `UNREAD`, `READ` |
 
@@ -191,7 +191,7 @@ data: {"id":42,"orderId":101,"componentId":1002,"eventType":"STATUS_CHANGED","fr
 | Метод | Путь | Назначение | Запрос | Успешный ответ | Ошибки |
 |---|---|---|---|---|---|
 | `GET` | `/{supplier}/offers` | Список предложений | query зависит от поставщика | `200` список | `400` |
-| `POST` | `/{supplier}/reserve` | Зарезервировать | заголовок `Idempotency-Key`; тело: `offerId`, данные пассажира или гостя | `200` бронь в статусе `RESERVED` | `400`, `409` (предложение недоступно), `503` |
+| `POST` | `/{supplier}/reserve` | Зарезервировать | заголовок `Idempotency-Key`; тело: `offerId`, данные пассажира или гостя | `200` бронь в статусе `PAYMENT_PENDING` | `400`, `409` (предложение недоступно), `503` |
 | `POST` | `/{supplier}/confirm/{id}` | Подтвердить бронь | без тела | `200` бронь в статусе `CONFIRMED` | `404`, `409`, `503` |
 | `POST` | `/{supplier}/cancel/{id}` | Отменить бронь (компенсация) | без тела | `200` бронь в статусе `CANCELLED` | `404`, `503` |
 | `GET` | `/{supplier}/status/{id}` | Текущий статус брони (для разбора `UNKNOWN`) | - | `200` бронь | `404` |
