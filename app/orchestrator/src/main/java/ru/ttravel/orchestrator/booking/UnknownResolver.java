@@ -3,6 +3,7 @@ package ru.ttravel.orchestrator.booking;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ru.ttravel.orchestrator.booking.models.UnknownResolution;
 import ru.ttravel.orchestrator.domain.data.ComponentAttempt;
 import ru.ttravel.orchestrator.domain.data.OrderComponent;
 import ru.ttravel.orchestrator.domain.exceptions.ComponentNotFoundException;
@@ -12,7 +13,6 @@ import ru.ttravel.orchestrator.domain.models.AttemptOperation;
 import ru.ttravel.orchestrator.domain.models.AttemptResult;
 import ru.ttravel.orchestrator.domain.models.ComponentStatus;
 import ru.ttravel.orchestrator.domain.models.EventType;
-import ru.ttravel.orchestrator.booking.models.UnknownResolution;
 import ru.ttravel.orchestrator.domain.repositories.ComponentAttemptRepository;
 import ru.ttravel.orchestrator.domain.repositories.OrderComponentRepository;
 import ru.ttravel.orchestrator.domain.state.ComponentStateMachine;
@@ -41,16 +41,8 @@ public class UnknownResolver {
     }
 
     /**
-     * Разрешает неопределённый результат резервирования или подтверждения.
-     *
-     * Метод вызывается после получения результата проверки у поставщика.
-     *
-     * @param componentId идентификатор компонента
-     * @param originalOperation операция, результат которой стал неизвестен
-     * @param resolution результат проверки у поставщика
-     * @param externalBookingId идентификатор бронирования у поставщика
-     * @param reason пояснение результата проверки
-     * @throws OrchestratorException если компонент не найден или переход недопустим
+     * Разрешает неопределённый результат резервирования,
+     * подтверждения или отмены.
      */
     @Transactional
     public void resolve(
@@ -72,29 +64,32 @@ public class UnknownResolver {
         }
 
         if (originalOperation != AttemptOperation.RESERVE
-                && originalOperation != AttemptOperation.CONFIRM) {
+                && originalOperation != AttemptOperation.CONFIRM
+                && originalOperation != AttemptOperation.CANCEL) {
             throw new InvalidRequestException(
-                    "UnknownResolver пока обрабатывает только RESERVE и CONFIRM"
+                    "Неподдерживаемая операция: " + originalOperation
             );
         }
 
-        ComponentStatus newStatus = mapResolution(resolution);
+        ComponentStatus newStatus = mapResolution(
+                originalOperation,
+                resolution
+        );
 
         if (newStatus == ComponentStatus.UNKNOWN) {
             saveAttempt(componentId, AttemptResult.TIMEOUT, reason);
             return;
         }
 
-        stateMachine.assertAllowed(component.getStatus(), newStatus);
-
         ComponentStatus previousStatus = component.getStatus();
+
+        stateMachine.assertAllowed(previousStatus, newStatus);
 
         if (externalBookingId != null && !externalBookingId.isBlank()) {
             component.setExternalBookingId(externalBookingId);
         }
 
         component.changeStatus(newStatus);
-
         componentRepository.save(component);
 
         saveAttempt(componentId, AttemptResult.SUCCESS, reason);
@@ -111,20 +106,35 @@ public class UnknownResolver {
     }
 
     /**
-     * Преобразует результат проверки поставщика
-     * во внутренний статус компонента.
+     * Преобразует ответ поставщика в статус компонента
+     * с учётом операции, результат которой выясняем.
      */
-    private ComponentStatus mapResolution(UnknownResolution resolution) {
+    private ComponentStatus mapResolution(
+            AttemptOperation operation,
+            UnknownResolution resolution
+    ) throws InvalidRequestException {
+        if (operation == AttemptOperation.CANCEL) {
+            return switch (resolution) {
+                case CANCELLED, NOT_FOUND -> ComponentStatus.CANCELLED;
+                case RESERVED -> ComponentStatus.RESERVED;
+                case CONFIRMED -> ComponentStatus.CONFIRMED;
+                case STILL_UNKNOWN -> ComponentStatus.UNKNOWN;
+            };
+        }
+
         return switch (resolution) {
             case RESERVED -> ComponentStatus.RESERVED;
             case CONFIRMED -> ComponentStatus.CONFIRMED;
             case NOT_FOUND -> ComponentStatus.FAILED;
+            case CANCELLED -> throw new InvalidRequestException(
+                    "Результат CANCELLED недопустим для операции " + operation
+            );
             case STILL_UNKNOWN -> ComponentStatus.UNKNOWN;
         };
     }
 
     /**
-     * Сохраняет информацию о попытке проверки статуса.
+     * Сохраняет результат проверки статуса.
      */
     private void saveAttempt(
             Long componentId,
@@ -138,7 +148,6 @@ public class UnknownResolver {
         );
 
         attempt.finish(result, reason);
-
         attemptRepository.save(attempt);
     }
 }

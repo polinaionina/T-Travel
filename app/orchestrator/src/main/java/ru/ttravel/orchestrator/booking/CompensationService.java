@@ -47,17 +47,17 @@ public class CompensationService {
     }
 
     /**
-     * Запускает компенсацию заказа.
+     * Запускает компенсацию бронирований заказа.
      *
-     * Переводит заказ в COMPENSATING и начинает отмену
-     * последнего активного компонента.
+     * DRAFT и PAYMENT_FAILED остаются в исходном статусе
+     * до завершения компенсации.
+     *
+     * ACTION_REQUIRED и NEEDS_HELP переходят в CANCELLING.
      *
      * @param orderId идентификатор заказа
      * @param userId идентификатор пользователя
      * @return попытка отмены первого компонента или null,
      * если отмена пока не может быть запущена
-     * @throws OrchestratorException если заказ не найден
-     * или переход состояния недопустим
      */
     @Transactional
     public ComponentAttempt startCompensation(Long orderId, Long userId)
@@ -65,35 +65,36 @@ public class CompensationService {
 
         TripOrder order = getOrder(orderId, userId);
 
-        log.info("Starting compensation: orderId={}, userId={}, status={}",
-                orderId,
-                userId,
-                order.getStatus()
-        );
+        OrderStatus status = order.getStatus();
 
-        if (order.getStatus() == OrderStatus.CANCELLED) {
+        log.info("Starting compensation: orderId={}, userId={}, status={}",
+                orderId, userId, status);
+
+        if (status == OrderStatus.CANCELLED) {
             log.debug("Order is already cancelled: orderId={}", orderId);
             return null;
         }
 
-        if (order.getStatus() == OrderStatus.COMPENSATING) {
-            log.debug("Compensation already in progress: orderId={}", orderId);
-            return startNextCancellation(order);
-        }
+        if (status == OrderStatus.ACTION_REQUIRED
+                || status == OrderStatus.NEEDS_HELP) {
 
-        if (order.getStatus() == OrderStatus.COMPENSATION_FAILED) {
+            String reason = status == OrderStatus.NEEDS_HELP
+                    ? "Возобновлена отмена заказа"
+                    : "Начата отмена заказа";
+
             transitionService.transition(
                     order,
-                    OrderStatus.COMPENSATING,
+                    OrderStatus.CANCELLING,
                     EventType.COMPENSATION_STARTED,
-                    "Повторный запуск компенсации"
+                    reason
             );
-        } else {
-            transitionService.transition(
-                    order,
-                    OrderStatus.COMPENSATING,
-                    EventType.COMPENSATION_STARTED,
-                    "Начата компенсация заказа"
+
+        } else if (status != OrderStatus.DRAFT
+                && status != OrderStatus.PAYMENT_FAILED
+                && status != OrderStatus.CANCELLING) {
+
+            throw new InvalidRequestException(
+                    "Отмена заказа недоступна в текущем статусе: " + status
             );
         }
 
@@ -104,17 +105,9 @@ public class CompensationService {
      * Обрабатывает результат отмены компонента.
      *
      * При успехе запускает отмену следующего компонента.
-     * При ошибке переводит заказ в COMPENSATION_FAILED.
+     * При ошибке из CANCELLING переводит заказ в NEEDS_HELP.
+     * При ошибке из DRAFT или PAYMENT_FAILED сохраняет статус заказа.
      * При таймауте ожидает разрешения UNKNOWN.
-     *
-     * @param orderId идентификатор заказа
-     * @param userId идентификатор пользователя
-     * @param componentId идентификатор компонента
-     * @param attempt попытка отмены
-     * @param result результат операции
-     * @param reason пояснение результата
-     * @return следующая попытка отмены или null
-     * @throws OrchestratorException если обработка невозможна
      */
     @Transactional
     public ComponentAttempt handleCancellationResult(
@@ -127,16 +120,16 @@ public class CompensationService {
     ) throws OrchestratorException {
 
         TripOrder order = getOrder(orderId, userId);
+        OrderStatus orderStatus = order.getStatus();
 
         log.info("Handling cancellation result: orderId={}, componentId={}, result={}",
-                orderId,
-                componentId,
-                result
-        );
+                orderId, componentId, result);
 
-        if (order.getStatus() != OrderStatus.COMPENSATING) {
-            throw new InvalidRequestException(
-                    "Заказ не находится в состоянии COMPENSATING"
+        if (orderStatus != OrderStatus.CANCELLING
+                && orderStatus != OrderStatus.DRAFT
+                && orderStatus != OrderStatus.PAYMENT_FAILED) {
+            throw new InvalidRequestException("Нельзя обработать результат отмены в статусе заказа: "
+                            + orderStatus
             );
         }
 
@@ -160,16 +153,21 @@ public class CompensationService {
 
         if (result == AttemptResult.FAILED) {
             log.error("Component cancellation failed: orderId={}, componentId={}, reason={}",
-                    orderId,
-                    componentId,
-                    reason
-            );
-            transitionService.transition(
-                    order,
-                    OrderStatus.COMPENSATION_FAILED,
-                    EventType.COMPENSATION_FAILED,
-                    "Не удалось отменить компонент " + componentId
-            );
+                    orderId, componentId, reason);
+
+            if (orderStatus == OrderStatus.CANCELLING) {
+                transitionService.transition(
+                        order,
+                        OrderStatus.NEEDS_HELP,
+                        EventType.COMPENSATION_FAILED,
+                        "Не удалось отменить компонент " + componentId
+                );
+            } else {
+                log.error("Cancellation failed while order remains in {}: orderId={}",
+                        orderStatus,
+                        orderId
+                );
+            }
 
             return null;
         }
@@ -190,22 +188,21 @@ public class CompensationService {
     /**
      * Находит следующий компонент для отмены.
      *
-     * Компоненты обрабатываются в обратном порядке stepNo.
+     * Компоненты отменяются в обратном порядке stepNo.
      */
-    private ComponentAttempt startNextCancellation(TripOrder order)
-            throws OrchestratorException {
+     private ComponentAttempt startNextCancellation(TripOrder order)
+                throws OrchestratorException {
 
-        List<OrderComponent> components = order.activeComponents()
+     List<OrderComponent> components = order.activeComponents()
                 .stream()
                 .sorted(Comparator.comparingLong(
                         OrderComponent::getStepNo
                 ).reversed())
                 .toList();
 
-        for (OrderComponent component : components) {
+     for (OrderComponent component : components) {
 
             ComponentStatus status = component.getStatus();
-
             if (status == ComponentStatus.CANCELLED
                     || status == ComponentStatus.FAILED
                     || status == ComponentStatus.PENDING) {
@@ -213,14 +210,15 @@ public class CompensationService {
             }
 
             if (status == ComponentStatus.RESERVED
-                    || status == ComponentStatus.CONFIRMED) {
+                    || status == ComponentStatus.CONFIRMED
+                    || status == ComponentStatus.COMPENSATING) {
 
                 if (hasPendingCancellation(component.getId())) {
-                    log.debug("Cancellation already pending: orderId={}, componentId={}",
-                            order.getId(),
-                            component.getId()
-                    );
-                    return null;
+                        log.debug("Cancellation already pending: orderId={}, componentId={}",
+                                order.getId(),
+                                component.getId()
+                        );
+                        return null;
                 }
 
                 log.info("Starting component cancellation: orderId={}, componentId={}, stepNo={}, status={}",
@@ -232,18 +230,20 @@ public class CompensationService {
 
                 return componentProcessor.startCancel(component.getId());
             }
-
             log.warn("Compensation paused: orderId={}, componentId={}, status={}",
-                    order.getId(),
-                    component.getId(),
-                    status
+                        order.getId(),
+                        component.getId(),
+                        status
             );
+
             return null;
         }
 
-        log.info("All component cancellations completed: orderId={}",
+        log.info(
+                "All component cancellations completed: orderId={}",
                 order.getId()
         );
+
         transitionService.transition(
                 order,
                 OrderStatus.CANCELLED,
@@ -252,7 +252,8 @@ public class CompensationService {
         );
 
         return null;
-    }
+        }
+
 
     /**
      * Проверяет наличие незавершённой попытки отмены.

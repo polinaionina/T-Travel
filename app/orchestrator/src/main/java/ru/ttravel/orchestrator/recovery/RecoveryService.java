@@ -21,9 +21,9 @@ import org.slf4j.LoggerFactory;
 public class RecoveryService {
 
     private static final Set<OrderStatus> RECOVERABLE_STATUSES = Set.of(
-            OrderStatus.SUBMITTED,
             OrderStatus.CONFIRMING,
-            OrderStatus.COMPENSATING
+            OrderStatus.PAYMENT_PENDING,
+            OrderStatus.CANCELLING
     );
 
     private final OrderRepository orderRepository;
@@ -51,12 +51,11 @@ public class RecoveryService {
     /**
      * Находит заказы, ожидающие продолжения подтверждения.
      *
-     * @return заказы в статусах SUBMITTED и CONFIRMING
+     * @return заказы в статусе CONFIRMING
      */
     @Transactional(readOnly = true)
     public List<TripOrder> findOrdersForConfirmationRecovery() {
         List<TripOrder> orders = orderRepository.findByStatusIn(Set.of(
-            OrderStatus.SUBMITTED,
             OrderStatus.CONFIRMING
         ));
 
@@ -68,12 +67,12 @@ public class RecoveryService {
     /**
      * Находит заказы, для которых необходимо продолжить компенсацию.
      *
-     * @return заказы в статусе COMPENSATING
+     * @return заказы в статусе CANCELLING
      */
     @Transactional(readOnly = true)
     public List<TripOrder> findOrdersForCompensationRecovery() {
         List<TripOrder> orders = orderRepository.findByStatusIn(Set.of(
-            OrderStatus.COMPENSATING
+            OrderStatus.CANCELLING
         ));
 
         log.info("Found {} orders for compensation recovery", orders.size());

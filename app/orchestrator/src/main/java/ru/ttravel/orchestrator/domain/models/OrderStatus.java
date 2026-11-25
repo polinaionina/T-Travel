@@ -2,13 +2,14 @@ package ru.ttravel.orchestrator.domain.models;
 
 public enum OrderStatus {
     DRAFT, 
-    SUBMITTED, 
-    CONFIRMING, 
+    CONFIRMING,
+    PAYMENT_PENDING,
     CONFIRMED,
     ACTION_REQUIRED,
-    COMPENSATING, 
-    CANCELLED, 
-    COMPENSATION_FAILED;
+    CANCELLED,
+    CANCELLING,
+    PAYMENT_FAILED,
+    NEEDS_HELP;
 
     /**
      * Можно ли в этом статусе менять состав заказа (выбирать предложения),

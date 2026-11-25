@@ -270,14 +270,10 @@ public class ComponentProcessor {
     }
 
     /**
-     * Начинает отмену бронирования компонента.
+     * Начинает или повторяет отмену бронирования компонента.
      *
-     * Переводит компонент в COMPENSATING и создаёт попытку отмены.
-     *
-     * @param componentId идентификатор компонента
-     * @return созданная попытка отмены
-     * @throws OrchestratorException если компонент не найден
-     * или переход недопустим
+     * Повторная попытка из COMPENSATING разрешена,
+     * если предыдущая попытка уже завершилась.
      */
     @Transactional
     public ComponentAttempt startCancel(Long componentId)
@@ -286,15 +282,36 @@ public class ComponentProcessor {
         OrderComponent component = getComponent(componentId);
 
         ComponentStatus previousStatus = component.getStatus();
-        ComponentStatus newStatus = ComponentStatus.COMPENSATING;
 
-        stateMachine.assertAllowed(previousStatus, newStatus);
+        if (previousStatus != ComponentStatus.RESERVED
+                && previousStatus != ComponentStatus.CONFIRMED
+                && previousStatus != ComponentStatus.COMPENSATING) {
+            throw new InvalidRequestException(
+                    "Нельзя отменить компонент в состоянии " + previousStatus
+            );
+        }
 
-        ComponentAttempt attempt = createAttempt(component, AttemptOperation.CANCEL);
+        if (hasPendingCancellation(componentId)) {
+            throw new InvalidRequestException(
+                    "Для компонента уже выполняется отмена"
+            );
+        }
 
-        component.changeStatus(newStatus);
+        if (previousStatus != ComponentStatus.COMPENSATING) {
+            stateMachine.assertAllowed(
+                    previousStatus,
+                    ComponentStatus.COMPENSATING
+            );
 
-        componentRepository.save(component);
+            component.changeStatus(ComponentStatus.COMPENSATING);
+            componentRepository.save(component);
+        }
+
+        ComponentAttempt attempt = createAttempt(
+                component,
+                AttemptOperation.CANCEL
+        );
+
         attemptRepository.save(attempt);
 
         eventService.record(
@@ -302,13 +319,26 @@ public class ComponentProcessor {
                 componentId,
                 EventType.COMPENSATION_STARTED,
                 previousStatus.name(),
-                newStatus.name(),
-                "Начата отмена бронирования компонента",
+                ComponentStatus.COMPENSATING.name(),
+                previousStatus == ComponentStatus.COMPENSATING
+                        ? "Повторная попытка отмены бронирования"
+                        : "Начата отмена бронирования компонента",
                 null
         );
 
         return attempt;
     }
+
+    /**
+     * Проверяет наличие незавершённой попытки отмены.
+     */
+    private boolean hasPendingCancellation(Long componentId) {
+        return attemptRepository.existsByComponentIdAndOperationAndResultIsNull(
+                componentId,
+                AttemptOperation.CANCEL
+        );
+    }
+
 
     /**
      * Завершает попытку отмены бронирования.

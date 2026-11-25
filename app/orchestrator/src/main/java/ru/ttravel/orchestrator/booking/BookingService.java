@@ -86,13 +86,6 @@ public class BookingService {
 
         transitionService.transition(
                 order,
-                OrderStatus.SUBMITTED,
-                EventType.ORDER_SUBMITTED,
-                "Заказ отправлен на подтверждение"
-        );
-
-        transitionService.transition(
-                order,
                 OrderStatus.CONFIRMING,
                 EventType.STATUS_CHANGED,
                 "Начато подтверждение компонентов заказа"
@@ -195,10 +188,10 @@ public class BookingService {
             );
             transitionService.transition(
                     order,
-                    OrderStatus.CONFIRMED,
-                    EventType.ORDER_CONFIRMED,
-                    "Все компоненты заказа подтверждены"
-            );
+                    OrderStatus.PAYMENT_PENDING,
+                    EventType.STATUS_CHANGED,
+                    "Все компоненты подтверждены, ожидается оплата"
+             );
 
             return null;
         }
@@ -228,18 +221,18 @@ public class BookingService {
             );
         }
 
-        boolean allReserved = components.stream()
+        boolean allReady = components.stream()
                 .allMatch(component ->
                         component.getStatus() == ComponentStatus.RESERVED
+                                || component.getStatus() == ComponentStatus.CONFIRMED
                 );
 
-        if (!allReserved) {
-            log.warn("Booking validation failed: components are not all reserved, orderId={}",
-                order.getId()
-            );
-            throw new InvalidRequestException(
-                    "Все выбранные компоненты должны быть зарезервированы"
-            );
+        if (!allReady) {
+                log.warn("Booking validation failed: components are not ready, orderId={}",
+                        order.getId());
+                throw new InvalidRequestException(
+                        "Все выбранные компоненты должны быть зарезервированы или подтверждены"
+                );
         }
     }
 
@@ -249,10 +242,16 @@ public class BookingService {
     private ComponentAttempt startNextConfirmation(TripOrder order)
             throws OrchestratorException {
 
-        for (OrderComponent component : order.activeComponents()) {
+        for (OrderComponent component : order.activeComponents().stream()
+                .sorted(java.util.Comparator.comparingLong(OrderComponent::getStepNo))
+                .toList()) {
 
-            if (component.getStatus() != ComponentStatus.RESERVED) {
-                continue;
+            if (hasPendingConfirmation(component.getId())) {
+                log.debug("Confirmation already pending: orderId={}, componentId={}",
+                        order.getId(),
+                        component.getId()
+                );
+                return null;
             }
 
             if (hasPendingConfirmation(component.getId())) {

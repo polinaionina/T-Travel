@@ -9,6 +9,7 @@ import ru.ttravel.orchestrator.domain.exceptions.OrchestratorException;
 import ru.ttravel.orchestrator.domain.exceptions.OrderNotFoundException;
 import ru.ttravel.orchestrator.domain.models.ComponentStatus;
 import ru.ttravel.orchestrator.domain.models.OrderStatus;
+import ru.ttravel.orchestrator.domain.models.EventType;
 import ru.ttravel.orchestrator.domain.repositories.OrderRepository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -148,9 +149,9 @@ public class OrderService {
                 return;
         }
 
-        if (order.getStatus() == OrderStatus.COMPENSATING) {
-                log.debug("Order compensation is already in progress: orderId={}", orderId);
-                return;
+        if (order.getStatus() == OrderStatus.CANCELLING) {
+            log.debug("Order cancellation is already in progress: orderId={}", orderId);
+            return;
         }
 
         boolean hasActiveReservations = order.activeComponents()
@@ -168,10 +169,19 @@ public class OrderService {
                 );
         }
 
+        if (order.getStatus() != OrderStatus.DRAFT
+                && order.getStatus() != OrderStatus.PAYMENT_FAILED) {
+            throw new InvalidRequestException(
+                    "Для отмены заказа в статусе "
+                            + order.getStatus()
+                            + " требуется соответствующий процесс отмены"
+            );
+        }
+
         orderTransitionService.transition(
                 order,
                 OrderStatus.CANCELLED,
-                ru.ttravel.orchestrator.domain.models.EventType.ORDER_CANCELLED,
+                EventType.ORDER_CANCELLED,
                 "Заказ отменён пользователем"
         );
     }

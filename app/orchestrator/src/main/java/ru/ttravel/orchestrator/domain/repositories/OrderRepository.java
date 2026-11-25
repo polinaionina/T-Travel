@@ -82,4 +82,6 @@ public interface OrderRepository extends JpaRepository<TripOrder, Long> {
      * @return заброшенные заказы
      */
     List<TripOrder> findByStatusInAndUpdatedAtBefore(Collection<OrderStatus> statuses, Instant moment);
+
+    List<TripOrder> findByStatusAndUpdatedAtBefore(OrderStatus status, Instant moment);
 }

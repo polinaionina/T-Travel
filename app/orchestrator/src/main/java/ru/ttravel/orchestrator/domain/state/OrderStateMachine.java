@@ -16,14 +16,15 @@ public class OrderStateMachine extends StateMachine<OrderStatus> {
 
     public OrderStateMachine() {
         super("Заказ", Map.of(
-                DRAFT, Set.of(SUBMITTED, CANCELLED),
-                SUBMITTED, Set.of(CONFIRMING, CANCELLED),
-                CONFIRMING, Set.of(CONFIRMED, COMPENSATING, ACTION_REQUIRED),
-                ACTION_REQUIRED, Set.of(COMPENSATING, SUBMITTED),
+                DRAFT, Set.of(CONFIRMING, CANCELLED),
+                CONFIRMING, Set.of(PAYMENT_PENDING, ACTION_REQUIRED),
+                ACTION_REQUIRED, Set.of(CONFIRMING, CANCELLING),
+                PAYMENT_PENDING, Set.of(CONFIRMED, PAYMENT_FAILED),
                 CONFIRMED, Set.of(),
-                COMPENSATING, Set.of(CANCELLED, COMPENSATION_FAILED),
+                PAYMENT_FAILED, Set.of(CANCELLED),
+                CANCELLING, Set.of(CANCELLED, NEEDS_HELP),
                 CANCELLED, Set.of(),
-                COMPENSATION_FAILED, Set.of(COMPENSATING)
+                NEEDS_HELP, Set.of(CANCELLING)
         ));
     }
 }

@@ -6,6 +6,7 @@ package ru.ttravel.orchestrator.booking.models;
 public enum UnknownResolution {
     RESERVED,
     CONFIRMED,
+    CANCELLED,
     NOT_FOUND,
     STILL_UNKNOWN
 }
