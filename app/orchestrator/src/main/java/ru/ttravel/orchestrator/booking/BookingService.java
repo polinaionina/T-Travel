@@ -254,10 +254,6 @@ public class BookingService {
                 return null;
             }
 
-            if (hasPendingConfirmation(component.getId())) {
-                continue;
-            }
-
             log.info("Starting component confirmation: orderId={}, componentId={}, componentType={}",
                 order.getId(),
                 component.getId(),
