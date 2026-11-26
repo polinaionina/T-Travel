@@ -1,7 +1,7 @@
 package ru.ttravel.contracts.supplier.response;
 
-import ru.ttravel.contracts.supplier.common.SupplierError;
-import ru.ttravel.contracts.supplier.common.SupplierOperationStatus;
+import ru.ttravel.contracts.supplier.models.SupplierError;
+import ru.ttravel.contracts.supplier.models.SupplierOperationStatus;
 
 /* Ответ на отмену бронирования. */
 public record CancelResponse(
