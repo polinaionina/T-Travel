@@ -15,8 +15,15 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.time.ZoneOffset;
+import org.springframework.data.domain.Sort;
+
+import ru.ttravel.contracts.reference.CityDto;
+import ru.ttravel.suppliers.client.ReferenceClient;
 import ru.ttravel.suppliers.airline.domain.*;
-import ru.ttravel.suppliers.airline.repository.*
+import ru.ttravel.suppliers.airline.repository.*;
 
 /**
  * Fills the airline simulator with deterministic test data on startup.
@@ -41,12 +48,14 @@ public class AirlineDataGenerator implements ApplicationRunner{
     private final AircraftRepository aircrafts;
     private final FlightRepository flights;
     private final FlightFareRepository fares;
+    private final ReferenceClient referenceClient;
 
     private final long seed;
     private final int daysAhead;
 
     public AirlineDataGenerator(AirportRepository airports, AircraftRepository aircrafts,
                                 FlightRepository flights, FlightFareRepository fares,
+                                ReferenceClient referenceClient,
                                 @Value("${simulator.airline.seed:67}") long seed,
                                 @Value("${simulator.airline.days-ahead:90}") int daysAhead) {
         this.airports = airports;
@@ -54,6 +63,7 @@ public class AirlineDataGenerator implements ApplicationRunner{
         this.flights = flights;
         this.fares = fares;
         this.seed = seed;
+        this.referenceClient = referenceClient;
         this.daysAhead = daysAhead;
     }
 
@@ -69,13 +79,16 @@ public class AirlineDataGenerator implements ApplicationRunner{
     }
 
     private void seedReferenceData() {
+        Map<String, CityDto> cities = referenceClient.loadCities().stream()
+                .collect(Collectors.toMap(CityDto::code, c -> c));
+
         airports.saveAll(List.of(
-                new Airport("SVO", "Moscow", "Sheremetyevo", "Europe/Moscow"),
-                new Airport("LED", "Saint Petersburg", "Pulkovo", "Europe/Moscow"),
-                new Airport("AER", "Sochi", "Sochi International", "Europe/Moscow"),
-                new Airport("KZN", "Kazan", "Kazan International", "Europe/Moscow"),
-                new Airport("KGD", "Kaliningrad", "Khrabrovo", "Europe/Kaliningrad"),
-                new Airport("SVX", "Yekaterinburg", "Koltsovo", "Asia/Yekaterinburg")));
+                new Airport("SVO", cityId(cities, "MOW"), "Sheremetyevo", "Europe/Moscow"),
+                new Airport("LED", cityId(cities, "LED"), "Pulkovo", "Europe/Moscow"),
+                new Airport("AER", cityId(cities, "AER"), "Sochi International", "Europe/Moscow"),
+                new Airport("KZN", cityId(cities, "KZN"), "Kazan International", "Europe/Moscow"),
+                new Airport("KGD", cityId(cities, "KGD"), "Khrabrovo", "Europe/Kaliningrad"),
+                new Airport("SVX", cityId(cities, "SVX"), "Koltsovo", "Asia/Yekaterinburg")));
 
         aircrafts.saveAll(List.of(
                 new Aircraft("320", "Airbus A320", 180),
@@ -83,12 +96,22 @@ public class AirlineDataGenerator implements ApplicationRunner{
                 new Aircraft("73H", "Boeing 737-800", 189)));
     }
 
+    private static Integer cityId(Map<String, CityDto> cities, String code) {
+        CityDto city = cities.get(code);
+        if (city == null) {
+            throw new IllegalStateException("City not found in reference service: " + code);
+        }
+        return city.id();
+    }
+
     private void generateFlights(Random random) {
-        List<Aircraft> fleet = aircrafts.findAll();
-        LocalDate startDate = LocalDate.now();
+        List<Aircraft> fleet = aircrafts.findAll(Sort.by("code"));
+        LocalDate startDate = LocalDate.now(ZoneOffset.UTC).plusDays(1);
         int flightCounter = 1000;
 
-        List<Flight> batch = new ArrayList<>();
+        List<Flight> flightBatch = new ArrayList<>();
+        List<FlightFare> fareBatch = new ArrayList<>();
+
         for (Route route : ROUTES) {
             for (boolean reverse : new boolean[]{false, true}) {
                 Airport from = airports.getReferenceById(reverse ? route.to() : route.from());
@@ -105,18 +128,16 @@ public class AirlineDataGenerator implements ApplicationRunner{
                                 .toOffsetDateTime();
                         OffsetDateTime arrival = departure.plusMinutes(route.durationMin());
 
-                        batch.add(new Flight(flightNo, from, to, departure, arrival,
-                                aircraft, "SCHEDULED"));
+                        Flight flight = new Flight(flightNo, from, to, departure, arrival,
+                                aircraft, "SCHEDULED");
+                        flightBatch.add(flight);
+                        fareBatch.addAll(buildFares(flight, route, random));
                     }
                 }
             }
         }
-        flights.saveAll(batch);
 
-        List<FlightFare> fareBatch = new ArrayList<>();
-        for (Flight flight : batch) {
-            fareBatch.addAll(buildFares(flight, route(flight), random));
-        }
+        flights.saveAll(flightBatch);
         fares.saveAll(fareBatch);
     }
 
@@ -138,12 +159,4 @@ public class AirlineDataGenerator implements ApplicationRunner{
         return Math.round(base * factor / 10000.0) * 10000;
     }
 
-    private Route route(Flight flight) {
-        String a = flight.getDepartureAirport().getCode();
-        String b = flight.getArrivalAirport().getCode();
-        return ROUTES.stream()
-                .filter(r -> (r.from().equals(a) && r.to().equals(b))
-                          || (r.from().equals(b) && r.to().equals(a)))
-                .findFirst().orElseThrow();
-    }
 }
