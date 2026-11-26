@@ -30,7 +30,7 @@ import java.time.ZoneOffset;
 public class Booking {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private Long id;
 
     /** The fare for the flight that the reservation is for. The flight is available via {@code fare.getFlight()}*/
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -84,11 +84,11 @@ public class Booking {
         this.createdAt = OffsetDateTime.now(ZoneOffset.UTC);;
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
