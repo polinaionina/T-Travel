@@ -2,6 +2,8 @@ package ru.ttravel.suppliers.airline.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import ru.ttravel.suppliers.models.BookingStatus;
 
 import java.lang.annotation.Inherited;
 import java.time.OffsetDateTime;
@@ -46,6 +49,7 @@ public class Booking {
     private String requestId;
 
     /** The status of the booking. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private BookingStatus status;
 

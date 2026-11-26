@@ -21,7 +21,7 @@ import java.time.ZoneOffset;
 import org.springframework.data.domain.Sort;
 
 import ru.ttravel.contracts.reference.CityDto;
-import ru.ttravel.suppliers.client.ReferenceClient;
+import ru.ttravel.suppliers.ReferenceClient;
 import ru.ttravel.suppliers.airline.domain.*;
 import ru.ttravel.suppliers.airline.repository.*;
 
