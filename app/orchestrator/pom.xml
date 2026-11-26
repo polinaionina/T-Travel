@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>ru.ttravel</groupId>
-        <artifactId>t-travel-app</artifactId>
+        <artifactId>t-travel</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
