@@ -1,0 +1,1 @@
+public interface RoomAvailabilityRepository extends JpaRepository<RoomAvailability, Integer> {}

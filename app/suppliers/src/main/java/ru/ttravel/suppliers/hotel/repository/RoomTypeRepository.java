@@ -1,0 +1,1 @@
+public interface RoomTypeRepository extends JpaRepository<RoomType, Integer> {}
